@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 from faker import Faker
 
-from config import GENERATED_DATA_DIR, RANDOM_SEED
+from config import (
+    GENERATED_DATA_DIR,
+    LOCATION_COUNT,
+    RANDOM_SEED,
+)
 
 
 def initialize_random_state() -> Faker:
@@ -30,9 +34,6 @@ def ensure_output_directory() -> None:
 def generate_regions() -> pd.DataFrame:
     """
     Generate the fixed enterprise operating regions.
-
-    The region list is intentionally deterministic and business-defined
-    rather than randomly generated.
     """
     regions = [
         {
@@ -52,6 +53,80 @@ def generate_regions() -> pd.DataFrame:
     return pd.DataFrame(regions)
 
 
+def generate_locations(faker: Faker, regions: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate deterministic operational locations across the enterprise regions.
+    """
+
+    location_types = [
+        "PLANT",
+        "WAREHOUSE",
+        "SERVICE_CENTER",
+        "CUSTOMER_SITE",
+        "PORT",
+    ]
+
+    country_catalog = {
+        "REG-001": [
+            ("United States", "US"),
+            ("Canada", "CA"),
+            ("Mexico", "MX"),
+        ],
+        "REG-002": [
+            ("Germany", "DE"),
+            ("Belgium", "BE"),
+            ("France", "FR"),
+            ("Spain", "ES"),
+            ("Netherlands", "NL"),
+        ],
+        "REG-003": [
+            ("Argentina", "AR"),
+            ("Brazil", "BR"),
+            ("Chile", "CL"),
+            ("Colombia", "CO"),
+            ("Peru", "PE"),
+        ],
+    }
+
+    locations = []
+
+    region_ids = regions["region_id"].tolist()
+
+    for index in range(1, LOCATION_COUNT + 1):
+        region_id = random.choice(region_ids)
+        country_name, country_code = random.choice(country_catalog[region_id])
+
+        location_type = random.choice(location_types)
+
+        location_id = f"LOC-{index:04d}"
+
+        city = faker.city()
+        state_province = faker.state()
+
+        latitude = round(random.uniform(-55.0, 60.0), 6)
+        longitude = round(random.uniform(-130.0, 30.0), 6)
+
+        active_flag = random.random() > 0.05
+
+        locations.append(
+            {
+                "location_id": location_id,
+                "location_name": f"{city} {location_type.replace('_', ' ').title()}",
+                "location_type": location_type,
+                "city": city,
+                "state_province": state_province,
+                "country": country_name,
+                "country_code": country_code,
+                "region_id": region_id,
+                "latitude": latitude,
+                "longitude": longitude,
+                "active_flag": active_flag,
+            }
+        )
+
+    return pd.DataFrame(locations)
+
+
 def write_dataset(df: pd.DataFrame, filename: str) -> None:
     """
     Write a generated dataset to the configured output directory.
@@ -69,11 +144,13 @@ def main() -> None:
     print("OpsIntel BI synthetic data generator")
     print(f"Random seed: {RANDOM_SEED}")
     print(f"Output directory: {GENERATED_DATA_DIR}")
-    print(f"Example deterministic company name: {faker.company()}")
     print()
 
     regions = generate_regions()
     write_dataset(regions, "regions.csv")
+
+    locations = generate_locations(faker, regions)
+    write_dataset(locations, "locations.csv")
 
 
 if __name__ == "__main__":
