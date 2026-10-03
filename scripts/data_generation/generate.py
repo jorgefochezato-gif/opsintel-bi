@@ -5,6 +5,7 @@ import pandas as pd
 from faker import Faker
 
 from config import (
+    CUSTOMER_COUNT,
     GENERATED_DATA_DIR,
     LOCATION_COUNT,
     RANDOM_SEED,
@@ -151,6 +152,60 @@ def generate_locations(faker: Faker, regions: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(locations)
 
 
+def generate_customers(
+    faker: Faker,
+    regions: pd.DataFrame,
+    customer_count: int,
+) -> pd.DataFrame:
+    """
+    Generate enterprise customers assigned to operating regions.
+    """
+
+    customer_segments = [
+        "ENTERPRISE",
+        "MID_MARKET",
+        "SMALL_BUSINESS",
+        "STRATEGIC",
+    ]
+
+    region_ids = regions["region_id"].tolist()
+
+    customers = []
+
+    for index in range(1, customer_count + 1):
+        customer_id = f"CUS-{index:05d}"
+
+        region_id = random.choice(region_ids)
+        status = "ACTIVE" if random.random() > 0.08 else "INACTIVE"
+
+        created_date = faker.date_between(
+            start_date="-8y",
+            end_date="-3y",
+        )
+
+        inactive_date = None
+
+        if status == "INACTIVE":
+            inactive_date = faker.date_between(
+                start_date="-2y",
+                end_date="today",
+            )
+
+        customers.append(
+            {
+                "customer_id": customer_id,
+                "customer_name": faker.company(),
+                "customer_status": status,
+                "customer_segment": random.choice(customer_segments),
+                "region_id": region_id,
+                "created_date": created_date,
+                "inactive_date": inactive_date,
+            }
+        )
+
+    return pd.DataFrame(customers)
+
+
 def write_dataset(df: pd.DataFrame, filename: str) -> None:
     """
     Write a generated dataset to the configured output directory.
@@ -175,6 +230,13 @@ def main() -> None:
 
     locations = generate_locations(faker, regions)
     write_dataset(locations, "locations.csv")
+
+    customers = generate_customers(
+    faker,
+    regions,
+    CUSTOMER_COUNT,
+    )
+    write_dataset(customers, "customers.csv")
 
 
 if __name__ == "__main__":
