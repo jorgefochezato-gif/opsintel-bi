@@ -5,6 +5,7 @@ import pandas as pd
 from faker import Faker
 
 from config import (
+    CARRIER_COUNT,
     CUSTOMER_COUNT,
     GENERATED_DATA_DIR,
     LOCATION_COUNT,
@@ -156,7 +157,7 @@ def generate_customers(
     faker: Faker,
     regions: pd.DataFrame,
     customer_count: int,
-) -> pd.DataFrame:
+ ) -> pd.DataFrame:
     """
     Generate enterprise customers assigned to operating regions.
     """
@@ -205,6 +206,75 @@ def generate_customers(
 
     return pd.DataFrame(customers)
 
+def generate_carriers(
+    faker: Faker,
+    regions: pd.DataFrame,
+    carrier_count: int,
+) -> pd.DataFrame:
+    """
+    Generate transportation carriers with deterministic business characteristics.
+
+    Cost and service profile fields will later influence shipment cost,
+    transit time, and delivery reliability.
+    """
+
+    transportation_modes = [
+        "TRUCK",
+        "RAIL",
+        "AIR",
+        "OCEAN",
+        "INTERMODAL",
+    ]
+
+    service_profiles = {
+        "PREMIUM": {
+            "cost_multiplier": 1.25,
+            "on_time_probability": 0.96,
+            "transit_time_multiplier": 0.85,
+        },
+        "STANDARD": {
+            "cost_multiplier": 1.00,
+            "on_time_probability": 0.90,
+            "transit_time_multiplier": 1.00,
+        },
+        "ECONOMY": {
+            "cost_multiplier": 0.82,
+            "on_time_probability": 0.82,
+            "transit_time_multiplier": 1.15,
+        },
+    }
+
+    service_profile_names = list(service_profiles.keys())
+    region_ids = regions["region_id"].tolist()
+
+    carriers = []
+
+    for index in range(1, carrier_count + 1):
+        carrier_id = f"CAR-{index:04d}"
+        service_profile = random.choice(service_profile_names)
+        profile = service_profiles[service_profile]
+
+        carrier_status = "ACTIVE" if random.random() > 0.10 else "INACTIVE"
+
+        carriers.append(
+            {
+                "carrier_id": carrier_id,
+                "carrier_name": f"{faker.company()} Logistics",
+                "carrier_status": carrier_status,
+                "transportation_mode": random.choice(transportation_modes),
+                "primary_region_id": random.choice(region_ids),
+                "service_profile": service_profile,
+                "cost_multiplier": profile["cost_multiplier"],
+                "on_time_probability": profile["on_time_probability"],
+                "transit_time_multiplier": profile["transit_time_multiplier"],
+                "created_date": faker.date_between(
+                    start_date="-10y",
+                    end_date="-3y",
+                ),
+            }
+        )
+
+    return pd.DataFrame(carriers)
 
 def write_dataset(df: pd.DataFrame, filename: str) -> None:
     """
@@ -237,6 +307,13 @@ def main() -> None:
     CUSTOMER_COUNT,
     )
     write_dataset(customers, "customers.csv")
+
+    carriers = generate_carriers(
+    faker,
+    regions,
+    CARRIER_COUNT,
+    )
+    write_dataset(carriers, "carriers.csv")
 
 
 if __name__ == "__main__":
