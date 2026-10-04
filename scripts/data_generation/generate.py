@@ -3,8 +3,10 @@ import random
 import numpy as np
 import pandas as pd
 from faker import Faker
+from math import asin, cos, radians, sin, sqrt
 
 from config import (
+    ASSET_COUNT,
     CARRIER_COUNT,
     CUSTOMER_COUNT,
     GENERATED_DATA_DIR,
@@ -289,9 +291,6 @@ def write_dataset(df: pd.DataFrame, filename: str) -> None:
     print(f"Wrote {len(df):,} rows -> {output_path}")
 
 
-from math import asin, cos, radians, sin, sqrt
-
-
 def haversine_distance_km(
     lat1: float,
     lon1: float,
@@ -403,6 +402,85 @@ def generate_routes(
     return pd.DataFrame(routes)
 
 
+def generate_assets(
+    faker: Faker,
+    locations: pd.DataFrame,
+    asset_count: int,
+) -> pd.DataFrame:
+    """
+    Generate reusable logistics assets with lifecycle and location attributes.
+    """
+
+    asset_types = [
+        "PALLET",
+        "CONTAINER",
+        "CRATE",
+        "TOTE",
+        "RACK",
+    ]
+
+    asset_statuses = [
+        "AVAILABLE",
+        "IN_USE",
+        "IN_TRANSIT",
+        "MAINTENANCE",
+        "LOST",
+        "RETIRED",
+    ]
+
+    status_weights = [
+        0.42,  # AVAILABLE
+        0.22,  # IN_USE
+        0.20,  # IN_TRANSIT
+        0.08,  # MAINTENANCE
+        0.03,  # LOST
+        0.05,  # RETIRED
+    ]
+
+    active_locations = locations[locations["active_flag"]].copy()
+
+    assets = []
+
+    for index in range(1, asset_count + 1):
+        asset_id = f"AST-{index:06d}"
+
+        home_location = active_locations.sample(1).iloc[0]
+        current_location = active_locations.sample(1).iloc[0]
+
+        asset_status = random.choices(
+            asset_statuses,
+            weights=status_weights,
+            k=1,
+        )[0]
+
+        created_date = faker.date_between(
+            start_date="-8y",
+            end_date="-1y",
+        )
+
+        retirement_date = None
+
+        if asset_status == "RETIRED":
+            retirement_date = faker.date_between(
+                start_date=created_date,
+                end_date="today",
+            )
+
+        assets.append(
+            {
+                "asset_id": asset_id,
+                "asset_type": random.choice(asset_types),
+                "asset_status": asset_status,
+                "home_location_id": home_location["location_id"],
+                "current_location_id": current_location["location_id"],
+                "created_date": created_date,
+                "retirement_date": retirement_date,
+            }
+        )
+
+    return pd.DataFrame(assets)
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -438,6 +516,12 @@ def main() -> None:
     )
     write_dataset(routes, "routes.csv")
 
+    assets = generate_assets(
+        faker,
+        locations,
+        ASSET_COUNT,
+    )
+    write_dataset(assets, "assets.csv")
 
 if __name__ == "__main__":
     main()
