@@ -10,6 +10,7 @@ from config import (
     GENERATED_DATA_DIR,
     LOCATION_COUNT,
     RANDOM_SEED,
+    ROUTE_COUNT,
 )
 
 
@@ -206,6 +207,7 @@ def generate_customers(
 
     return pd.DataFrame(customers)
 
+
 def generate_carriers(
     faker: Faker,
     regions: pd.DataFrame,
@@ -276,6 +278,7 @@ def generate_carriers(
 
     return pd.DataFrame(carriers)
 
+
 def write_dataset(df: pd.DataFrame, filename: str) -> None:
     """
     Write a generated dataset to the configured output directory.
@@ -284,6 +287,120 @@ def write_dataset(df: pd.DataFrame, filename: str) -> None:
     df.to_csv(output_path, index=False)
 
     print(f"Wrote {len(df):,} rows -> {output_path}")
+
+
+from math import asin, cos, radians, sin, sqrt
+
+
+def haversine_distance_km(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+) -> float:
+    """
+    Calculate approximate great-circle distance between two coordinates.
+    """
+    earth_radius_km = 6371.0
+
+    lat1_rad = radians(lat1)
+    lon1_rad = radians(lon1)
+    lat2_rad = radians(lat2)
+    lon2_rad = radians(lon2)
+
+    delta_lat = lat2_rad - lat1_rad
+    delta_lon = lon2_rad - lon1_rad
+
+    a = (
+        sin(delta_lat / 2) ** 2
+        + cos(lat1_rad)
+        * cos(lat2_rad)
+        * sin(delta_lon / 2) ** 2
+    )
+
+    c = 2 * asin(sqrt(a))
+
+    return earth_radius_km * c
+
+
+def generate_routes(
+    locations: pd.DataFrame,
+    route_count: int,
+) -> pd.DataFrame:
+    """
+    Generate unique origin-to-destination transportation routes.
+    """
+
+    mode_speed_km_per_day = {
+        "TRUCK": 650,
+        "RAIL": 800,
+        "AIR": 5000,
+        "OCEAN": 700,
+        "INTERMODAL": 600,
+    }
+
+    active_locations = locations[locations["active_flag"]].copy()
+
+    routes = []
+    used_pairs = set()
+
+    while len(routes) < route_count:
+        origin = active_locations.sample(1).iloc[0]
+        destination = active_locations.sample(1).iloc[0]
+
+        if origin["location_id"] == destination["location_id"]:
+            continue
+
+        route_key = (
+            origin["location_id"],
+            destination["location_id"],
+        )
+
+        if route_key in used_pairs:
+            continue
+
+        used_pairs.add(route_key)
+
+        distance_km = haversine_distance_km(
+            origin["latitude"],
+            origin["longitude"],
+            destination["latitude"],
+            destination["longitude"],
+        )
+
+        same_region = origin["region_id"] == destination["region_id"]
+
+        if same_region:
+            possible_modes = ["TRUCK", "RAIL", "INTERMODAL"]
+        else:
+            possible_modes = ["AIR", "OCEAN", "INTERMODAL"]
+
+        transportation_mode = random.choice(possible_modes)
+
+        expected_transit_days = max(
+            1,
+            round(
+                distance_km
+                / mode_speed_km_per_day[transportation_mode]
+            ),
+        )
+
+        route_id = f"RTE-{len(routes) + 1:05d}"
+
+        routes.append(
+            {
+                "route_id": route_id,
+                "origin_location_id": origin["location_id"],
+                "destination_location_id": destination["location_id"],
+                "distance_km": round(distance_km, 1),
+                "distance_unit": "KM",
+                "expected_transit_days": expected_transit_days,
+                "transportation_mode": transportation_mode,
+                "active_flag": random.random() > 0.05,
+            }
+        )
+
+    return pd.DataFrame(routes)
 
 
 def main() -> None:
@@ -314,6 +431,12 @@ def main() -> None:
     CARRIER_COUNT,
     )
     write_dataset(carriers, "carriers.csv")
+
+    routes = generate_routes(
+    locations,
+    ROUTE_COUNT,
+    )
+    write_dataset(routes, "routes.csv")
 
 
 if __name__ == "__main__":
