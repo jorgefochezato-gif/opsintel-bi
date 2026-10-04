@@ -672,6 +672,254 @@ def generate_shipments(
     return pd.DataFrame(shipments)
 
 
+def generate_transportation_costs(
+    shipments: pd.DataFrame,
+    carriers: pd.DataFrame,
+    routes: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Generate transportation cost transactions associated with shipments.
+
+    Cost behavior is influenced by:
+    - route distance
+    - transportation mode
+    - shipment quantity
+    - carrier cost profile
+
+    A shipment may contain multiple cost transactions.
+    """
+
+    mode_base_rate_per_km = {
+        "TRUCK": 1.20,
+        "RAIL": 0.75,
+        "AIR": 3.80,
+        "OCEAN": 0.45,
+        "INTERMODAL": 0.95,
+    }
+
+    carrier_lookup = (
+        carriers
+        .set_index("carrier_id")
+        [
+            [
+                "cost_multiplier",
+                "service_profile",
+            ]
+        ]
+        .to_dict("index")
+    )
+
+    route_lookup = (
+        routes
+        .set_index("route_id")
+        [
+            [
+                "distance_km",
+                "transportation_mode",
+            ]
+        ]
+        .to_dict("index")
+    )
+
+    cost_records = []
+    cost_index = 1
+
+    for shipment in shipments.itertuples(index=False):
+        if shipment.shipment_status == "CANCELLED":
+            continue
+
+        route = route_lookup[shipment.route_id]
+        carrier = carrier_lookup[shipment.carrier_id]
+
+        distance_km = float(route["distance_km"])
+        transportation_mode = route["transportation_mode"]
+
+        quantity = int(shipment.shipment_quantity)
+
+        base_rate = mode_base_rate_per_km[
+            transportation_mode
+        ]
+
+        quantity_factor = max(
+            1.0,
+            quantity ** 0.45,
+        )
+
+        base_freight = (
+            distance_km
+            * base_rate
+            * quantity_factor
+            * float(carrier["cost_multiplier"])
+        )
+
+        # Add modest deterministic-looking commercial variation.
+        base_freight *= random.uniform(0.92, 1.08)
+
+        base_freight = max(
+            25.0,
+            round(base_freight, 2),
+        )
+
+        shipment_date = pd.Timestamp(
+            shipment.shipment_date
+        )
+
+        cost_records.append(
+            {
+                "transportation_cost_id": (
+                    f"CST-{cost_index:08d}"
+                ),
+                "shipment_id": shipment.shipment_id,
+                "cost_date": shipment_date.date(),
+                "cost_type": "BASE_FREIGHT",
+                "cost_amount": base_freight,
+                "currency": "USD",
+                "transaction_type": "CHARGE",
+                "created_timestamp": (
+                    shipment_date
+                    + pd.Timedelta(
+                        hours=random.randint(0, 23),
+                        minutes=random.randint(0, 59),
+                    )
+                ),
+            }
+        )
+
+        cost_index += 1
+
+        # Fuel surcharge is common but not universal.
+        if random.random() < 0.88:
+            fuel_rate = random.uniform(
+                0.08,
+                0.20,
+            )
+
+            fuel_surcharge = round(
+                base_freight * fuel_rate,
+                2,
+            )
+
+            cost_records.append(
+                {
+                    "transportation_cost_id": (
+                        f"CST-{cost_index:08d}"
+                    ),
+                    "shipment_id": shipment.shipment_id,
+                    "cost_date": shipment_date.date(),
+                    "cost_type": "FUEL_SURCHARGE",
+                    "cost_amount": fuel_surcharge,
+                    "currency": "USD",
+                    "transaction_type": "CHARGE",
+                    "created_timestamp": (
+                        shipment_date
+                        + pd.Timedelta(
+                            hours=random.randint(0, 23),
+                            minutes=random.randint(0, 59),
+                        )
+                    ),
+                }
+            )
+
+            cost_index += 1
+
+        # Some shipments generate accessorial charges.
+        if random.random() < 0.18:
+            accessorial_charge = round(
+                random.uniform(30, 350),
+                2,
+            )
+
+            cost_records.append(
+                {
+                    "transportation_cost_id": (
+                        f"CST-{cost_index:08d}"
+                    ),
+                    "shipment_id": shipment.shipment_id,
+                    "cost_date": shipment_date.date(),
+                    "cost_type": "ACCESSORIAL",
+                    "cost_amount": accessorial_charge,
+                    "currency": "USD",
+                    "transaction_type": "CHARGE",
+                    "created_timestamp": (
+                        shipment_date
+                        + pd.Timedelta(
+                            hours=random.randint(0, 23),
+                            minutes=random.randint(0, 59),
+                        )
+                    ),
+                }
+            )
+
+            cost_index += 1
+
+        # Toll charges occur mainly on ground transportation.
+        if (
+            transportation_mode
+            in {"TRUCK", "INTERMODAL"}
+            and random.random() < 0.30
+        ):
+            toll_charge = round(
+                random.uniform(10, 180),
+                2,
+            )
+
+            cost_records.append(
+                {
+                    "transportation_cost_id": (
+                        f"CST-{cost_index:08d}"
+                    ),
+                    "shipment_id": shipment.shipment_id,
+                    "cost_date": shipment_date.date(),
+                    "cost_type": "TOLL",
+                    "cost_amount": toll_charge,
+                    "currency": "USD",
+                    "transaction_type": "CHARGE",
+                    "created_timestamp": (
+                        shipment_date
+                        + pd.Timedelta(
+                            hours=random.randint(0, 23),
+                            minutes=random.randint(0, 59),
+                        )
+                    ),
+                }
+            )
+
+            cost_index += 1
+
+        # Small proportion of shipments receive a correction or credit.
+        if random.random() < 0.015:
+            credit_amount = round(
+                -base_freight
+                * random.uniform(0.02, 0.15),
+                2,
+            )
+
+            cost_records.append(
+                {
+                    "transportation_cost_id": (
+                        f"CST-{cost_index:08d}"
+                    ),
+                    "shipment_id": shipment.shipment_id,
+                    "cost_date": shipment_date.date(),
+                    "cost_type": "CORRECTION",
+                    "cost_amount": credit_amount,
+                    "currency": "USD",
+                    "transaction_type": "CREDIT",
+                    "created_timestamp": (
+                        shipment_date
+                        + pd.Timedelta(
+                            days=random.randint(1, 10),
+                            hours=random.randint(0, 23),
+                        )
+                    ),
+                }
+            )
+
+            cost_index += 1
+
+    return pd.DataFrame(cost_records)
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -713,15 +961,27 @@ def main() -> None:
         ASSET_COUNT,
     )
     write_dataset(assets, "assets.csv")
+    
     shipments = generate_shipments(
-    faker,
-    customers,
-    carriers,
-    routes,
-    locations,
-    SHIPMENT_COUNT,
+      faker,
+      customers,
+      carriers,
+      routes,
+      locations,
+      SHIPMENT_COUNT,
     )
     write_dataset(shipments, "shipments.csv")
+
+    transportation_costs = generate_transportation_costs(
+      shipments,
+      carriers,
+      routes,
+    )
+    write_dataset(
+        transportation_costs,
+        "transportation_costs.csv",
+    )
+
 
 if __name__ == "__main__":
     main()
