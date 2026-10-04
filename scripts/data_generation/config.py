@@ -11,7 +11,7 @@ RANDOM_SEED = 42
 
 # Historical reporting period
 START_DATE = "2024-01-01"
-END_DATE = "2026-12-31"
+END_DATE = "2026-09-30"
 
 # Initial dataset sizes
 REGION_COUNT = 3

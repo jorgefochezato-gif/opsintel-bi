@@ -9,10 +9,13 @@ from config import (
     ASSET_COUNT,
     CARRIER_COUNT,
     CUSTOMER_COUNT,
+    END_DATE,
     GENERATED_DATA_DIR,
     LOCATION_COUNT,
     RANDOM_SEED,
     ROUTE_COUNT,
+    SHIPMENT_COUNT,
+    START_DATE,
 )
 
 
@@ -481,6 +484,194 @@ def generate_assets(
     return pd.DataFrame(assets)
 
 
+def generate_shipments(
+    faker: Faker,
+    customers: pd.DataFrame,
+    carriers: pd.DataFrame,
+    routes: pd.DataFrame,
+    locations: pd.DataFrame,
+    shipment_count: int,
+) -> pd.DataFrame:
+    """
+    Generate shipment transactions using customer, carrier, route,
+    service-level, and date behavior.
+
+    Carrier service profiles influence delivery reliability and transit time.
+    """
+
+    start_date = pd.Timestamp(START_DATE)
+    end_date = pd.Timestamp(END_DATE)
+
+    date_range_days = (end_date - start_date).days
+
+    location_region_lookup = (
+        locations
+        .set_index("location_id")["region_id"]
+        .to_dict()
+    )
+
+    active_customers = customers[
+        customers["customer_status"] == "ACTIVE"
+    ].copy()
+
+    active_carriers = carriers[
+        carriers["carrier_status"] == "ACTIVE"
+    ].copy()
+
+    active_routes = routes[
+        routes["active_flag"]
+    ].copy()
+
+    shipments = []
+
+    for index in range(1, shipment_count + 1):
+        shipment_id = f"SHP-{index:07d}"
+
+        route = active_routes.sample(1).iloc[0]
+
+        origin_location_id = route["origin_location_id"]
+        destination_location_id = route["destination_location_id"]
+
+        origin_region_id = location_region_lookup[origin_location_id]
+
+        # Prefer customers associated with the shipment's origin region.
+        regional_customers = active_customers[
+            active_customers["region_id"] == origin_region_id
+        ]
+
+        if regional_customers.empty:
+            customer = active_customers.sample(1).iloc[0]
+        else:
+            customer = regional_customers.sample(1).iloc[0]
+
+        # Prefer carriers whose transportation mode matches the route.
+        compatible_carriers = active_carriers[
+            active_carriers["transportation_mode"]
+            == route["transportation_mode"]
+        ]
+
+        if compatible_carriers.empty:
+            carrier = active_carriers.sample(1).iloc[0]
+        else:
+            carrier = compatible_carriers.sample(1).iloc[0]
+
+        shipment_date = start_date + pd.Timedelta(
+            days=random.randint(0, date_range_days)
+        )
+
+        expected_transit_days = int(
+            route["expected_transit_days"]
+        )
+
+        expected_delivery_date = (
+            shipment_date
+            + pd.Timedelta(days=expected_transit_days)
+        )
+
+        status_roll = random.random()
+
+        if status_roll < 0.92:
+            shipment_status = "DELIVERED"
+        elif status_roll < 0.96:
+            shipment_status = "CANCELLED"
+        elif status_roll < 0.985:
+            shipment_status = "IN_TRANSIT"
+        else:
+            shipment_status = "PLANNED"
+
+        actual_delivery_date = None
+
+        if shipment_status == "DELIVERED":
+            on_time_probability = float(
+                carrier["on_time_probability"]
+            )
+
+            transit_multiplier = float(
+                carrier["transit_time_multiplier"]
+            )
+
+            baseline_days = max(
+                1,
+                round(
+                    expected_transit_days
+                    * transit_multiplier
+                ),
+            )
+
+            if random.random() <= on_time_probability:
+                # Delivered on time.
+                actual_transit_days = min(
+                    expected_transit_days,
+                    max(
+                        1,
+                        baseline_days
+                        + random.randint(-1, 0),
+                    ),
+                )
+            else:
+                # Late delivery.
+                late_days = random.randint(1, 5)
+
+                actual_transit_days = max(
+                    expected_transit_days + late_days,
+                    baseline_days + late_days,
+                )
+
+            actual_delivery_date = (
+                shipment_date
+                + pd.Timedelta(days=actual_transit_days)
+            )
+
+        shipment_quantity = max(
+            1,
+            int(
+                np.random.lognormal(
+                    mean=3.2,
+                    sigma=0.65,
+                )
+            ),
+        )
+
+        created_timestamp = (
+            shipment_date
+            - pd.Timedelta(
+                days=random.randint(0, 7)
+            )
+            + pd.Timedelta(
+                hours=random.randint(0, 23),
+                minutes=random.randint(0, 59),
+            )
+        )
+
+        shipments.append(
+            {
+                "shipment_id": shipment_id,
+                "customer_id": customer["customer_id"],
+                "carrier_id": carrier["carrier_id"],
+                "route_id": route["route_id"],
+                "origin_location_id": origin_location_id,
+                "destination_location_id": destination_location_id,
+                "shipment_date": shipment_date.date(),
+                "expected_delivery_date": (
+                    expected_delivery_date.date()
+                ),
+                "actual_delivery_date": (
+                    actual_delivery_date.date()
+                    if actual_delivery_date is not None
+                    else None
+                ),
+                "shipment_status": shipment_status,
+                "shipment_quantity": shipment_quantity,
+                "transportation_mode": route[
+                    "transportation_mode"
+                ],
+                "created_timestamp": created_timestamp,
+            }
+        )
+
+    return pd.DataFrame(shipments)
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -522,6 +713,15 @@ def main() -> None:
         ASSET_COUNT,
     )
     write_dataset(assets, "assets.csv")
+    shipments = generate_shipments(
+    faker,
+    customers,
+    carriers,
+    routes,
+    locations,
+    SHIPMENT_COUNT,
+    )
+    write_dataset(shipments, "shipments.csv")
 
 if __name__ == "__main__":
     main()
