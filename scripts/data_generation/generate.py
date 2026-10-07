@@ -920,6 +920,86 @@ def generate_transportation_costs(
     return pd.DataFrame(cost_records)
 
 
+def generate_transportation_budgets(
+    regions: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Generate monthly transportation budgets by region.
+
+    Grain:
+    one row per month + region.
+    """
+
+    month_starts = pd.date_range(
+        start=START_DATE,
+        end=END_DATE,
+        freq="MS",
+    )
+
+    base_monthly_budget = {
+        "REG-001": 1_250_000,
+        "REG-002": 950_000,
+        "REG-003": 475_000,
+    }
+
+    budgets = []
+    budget_index = 1
+
+    for month in month_starts:
+        month_number = month.month
+
+        # Mild seasonal planning pattern.
+        if month_number in {11, 12}:
+            seasonal_multiplier = 1.12
+        elif month_number in {6, 7, 8}:
+            seasonal_multiplier = 1.06
+        elif month_number in {1, 2}:
+            seasonal_multiplier = 0.94
+        else:
+            seasonal_multiplier = 1.00
+
+        for region in regions.itertuples(index=False):
+            baseline = base_monthly_budget[
+                region.region_id
+            ]
+
+            planning_variation = random.uniform(
+                0.97,
+                1.03,
+            )
+
+            budget_amount = round(
+                baseline
+                * seasonal_multiplier
+                * planning_variation,
+                2,
+            )
+
+            budgets.append(
+                {
+                    "budget_id": (
+                        f"BUD-{budget_index:06d}"
+                    ),
+                    "budget_month": month.date(),
+                    "region_id": region.region_id,
+                    "budget_amount": budget_amount,
+                    "currency": "USD",
+                    "created_timestamp": (
+                        month
+                        - pd.Timedelta(days=30)
+                        + pd.Timedelta(
+                            hours=random.randint(0, 23),
+                            minutes=random.randint(0, 59),
+                        )
+                    ),
+                }
+            )
+
+            budget_index += 1
+
+    return pd.DataFrame(budgets)
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -980,6 +1060,14 @@ def main() -> None:
     write_dataset(
         transportation_costs,
         "transportation_costs.csv",
+    )
+
+    transportation_budgets = generate_transportation_budgets(
+    regions,
+    )
+    write_dataset(
+        transportation_budgets,
+        "transportation_budgets.csv",
     )
 
 
