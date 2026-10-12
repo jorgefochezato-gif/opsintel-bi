@@ -18,6 +18,7 @@ from config import (
     LOCATION_COUNT,
     MISSING_CARRIER_RATE,
     RANDOM_SEED,
+    RAW_DATA_DIR,
     ROUTE_COUNT,
     SHIPMENT_COUNT,
     START_DATE,
@@ -37,11 +38,19 @@ def initialize_random_state() -> Faker:
     return faker
 
 
-def ensure_output_directory() -> None:
+def ensure_output_directories() -> None:
     """
-    Ensure the generated-data directory exists before writing files.
+    Ensure all generated-data output directories exist.
     """
-    GENERATED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    GENERATED_DATA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    RAW_DATA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
 
 def generate_regions() -> pd.DataFrame:
@@ -289,14 +298,24 @@ def generate_carriers(
     return pd.DataFrame(carriers)
 
 
-def write_dataset(df: pd.DataFrame, filename: str) -> None:
+def write_dataset(
+    df: pd.DataFrame,
+    filename: str,
+    output_directory=GENERATED_DATA_DIR,
+) -> None:
     """
-    Write a generated dataset to the configured output directory.
+    Write a dataset to the selected output directory.
     """
-    output_path = GENERATED_DATA_DIR / filename
-    df.to_csv(output_path, index=False)
+    output_path = output_directory / filename
 
-    print(f"Wrote {len(df):,} rows -> {output_path}")
+    df.to_csv(
+        output_path,
+        index=False,
+    )
+
+    print(
+        f"Wrote {len(df):,} rows -> {output_path}"
+    )
 
 
 def haversine_distance_km(
@@ -1970,7 +1989,7 @@ def inject_data_quality_defects(
 
 def main() -> None:
     faker = initialize_random_state()
-    ensure_output_directory()
+    ensure_output_directories()
 
     print("OpsIntel BI synthetic data generator")
     print(f"Random seed: {RANDOM_SEED}")
@@ -2071,12 +2090,14 @@ def main() -> None:
 
     write_dataset(
         shipments_raw,
-        "shipments_raw.csv",
+        "shipments.csv",
+        RAW_DATA_DIR,
     )
 
     write_dataset(
         transportation_costs_raw,
-        "transportation_costs_raw.csv",
+        "transportation_costs.csv",
+        RAW_DATA_DIR,
     )
 
     write_dataset(

@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Output directories
 GENERATED_DATA_DIR = PROJECT_ROOT / "data" / "generated"
+RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 # Reproducibility
 RANDOM_SEED = 42
