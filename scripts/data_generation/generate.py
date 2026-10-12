@@ -1267,6 +1267,316 @@ def generate_asset_movements(
     )
 
 
+def generate_operational_exceptions(
+    shipments: pd.DataFrame,
+    transportation_costs: pd.DataFrame,
+    asset_movements: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Generate operational exceptions derived from shipment, cost,
+    and asset movement behavior.
+
+    Grain:
+    one row per operational exception event.
+    """
+
+    exceptions = []
+    exception_index = 1
+
+    # ---------------------------------------------------------
+    # Late delivery exceptions
+    # ---------------------------------------------------------
+
+    delivered_shipments = shipments[
+        shipments["shipment_status"] == "DELIVERED"
+    ].copy()
+
+    delivered_shipments["actual_delivery_date"] = pd.to_datetime(
+        delivered_shipments["actual_delivery_date"]
+    )
+
+    delivered_shipments["expected_delivery_date"] = pd.to_datetime(
+        delivered_shipments["expected_delivery_date"]
+    )
+
+    late_shipments = delivered_shipments[
+        delivered_shipments["actual_delivery_date"]
+        > delivered_shipments["expected_delivery_date"]
+    ].copy()
+
+    for shipment in late_shipments.itertuples(index=False):
+        late_days = (
+            shipment.actual_delivery_date
+            - shipment.expected_delivery_date
+        ).days
+
+        if late_days >= 5:
+            severity = "CRITICAL"
+        elif late_days >= 3:
+            severity = "HIGH"
+        elif late_days >= 2:
+            severity = "MEDIUM"
+        else:
+            severity = "LOW"
+
+        resolved_flag = random.random() < 0.90
+
+        resolution_date = None
+
+        if resolved_flag:
+            resolution_date = (
+                shipment.actual_delivery_date
+                + pd.Timedelta(days=random.randint(0, 5))
+            ).date()
+
+        exceptions.append(
+            {
+                "exception_id": f"EXC-{exception_index:08d}",
+                "exception_type": "LATE_DELIVERY",
+                "exception_date": shipment.actual_delivery_date.date(),
+                "severity": severity,
+                "shipment_id": shipment.shipment_id,
+                "asset_id": None,
+                "customer_id": shipment.customer_id,
+                "carrier_id": shipment.carrier_id,
+                "route_id": shipment.route_id,
+                "location_id": shipment.destination_location_id,
+                "description": (
+                    f"Shipment delivered {late_days} day(s) late."
+                ),
+                "resolved_flag": resolved_flag,
+                "resolution_date": resolution_date,
+            }
+        )
+
+        exception_index += 1
+
+    # ---------------------------------------------------------
+    # Cancelled shipment exceptions
+    # ---------------------------------------------------------
+
+    cancelled_shipments = shipments[
+        shipments["shipment_status"] == "CANCELLED"
+    ]
+
+    for shipment in cancelled_shipments.itertuples(index=False):
+        exception_date = pd.Timestamp(
+            shipment.shipment_date
+        ).date()
+
+        severity = random.choices(
+            [
+                "LOW",
+                "MEDIUM",
+                "HIGH",
+            ],
+            weights=[
+                0.25,
+                0.55,
+                0.20,
+            ],
+            k=1,
+        )[0]
+
+        resolved_flag = random.random() < 0.95
+
+        resolution_date = None
+
+        if resolved_flag:
+            resolution_date = (
+                pd.Timestamp(exception_date)
+                + pd.Timedelta(
+                    days=random.randint(1, 7)
+                )
+            ).date()
+
+        exceptions.append(
+            {
+                "exception_id": f"EXC-{exception_index:08d}",
+                "exception_type": "CANCELLED_SHIPMENT",
+                "exception_date": exception_date,
+                "severity": severity,
+                "shipment_id": shipment.shipment_id,
+                "asset_id": None,
+                "customer_id": shipment.customer_id,
+                "carrier_id": shipment.carrier_id,
+                "route_id": shipment.route_id,
+                "location_id": shipment.origin_location_id,
+                "description": "Shipment was cancelled.",
+                "resolved_flag": resolved_flag,
+                "resolution_date": resolution_date,
+            }
+        )
+
+        exception_index += 1
+
+    # ---------------------------------------------------------
+    # Cost anomaly exceptions
+    # ---------------------------------------------------------
+
+    shipment_costs = (
+        transportation_costs
+        .groupby(
+            "shipment_id",
+            as_index=False,
+        )["cost_amount"]
+        .sum()
+        .rename(
+            columns={
+                "cost_amount": "total_transportation_cost",
+            }
+        )
+    )
+
+    cost_threshold = shipment_costs[
+        "total_transportation_cost"
+    ].quantile(0.995)
+
+    anomalous_costs = shipment_costs[
+        shipment_costs["total_transportation_cost"]
+        >= cost_threshold
+    ]
+
+    shipment_lookup = (
+        shipments
+        .set_index("shipment_id")
+        .to_dict("index")
+    )
+
+    for cost_record in anomalous_costs.itertuples(index=False):
+        shipment = shipment_lookup[
+            cost_record.shipment_id
+        ]
+
+        exception_date = pd.Timestamp(
+            shipment["shipment_date"]
+        ).date()
+
+        resolved_flag = random.random() < 0.80
+
+        resolution_date = None
+
+        if resolved_flag:
+            resolution_date = (
+                pd.Timestamp(exception_date)
+                + pd.Timedelta(
+                    days=random.randint(1, 10)
+                )
+            ).date()
+
+        exceptions.append(
+            {
+                "exception_id": f"EXC-{exception_index:08d}",
+                "exception_type": "COST_ANOMALY",
+                "exception_date": exception_date,
+                "severity": "HIGH",
+                "shipment_id": cost_record.shipment_id,
+                "asset_id": None,
+                "customer_id": shipment["customer_id"],
+                "carrier_id": shipment["carrier_id"],
+                "route_id": shipment["route_id"],
+                "location_id": shipment[
+                    "destination_location_id"
+                ],
+                "description": (
+                    "Shipment transportation cost exceeded "
+                    "the high-cost anomaly threshold."
+                ),
+                "resolved_flag": resolved_flag,
+                "resolution_date": resolution_date,
+            }
+        )
+
+        exception_index += 1
+
+    # ---------------------------------------------------------
+    # Asset-related exceptions
+    # ---------------------------------------------------------
+
+    movement_sample = asset_movements.sample(
+        frac=0.015,
+        random_state=RANDOM_SEED,
+    )
+
+    for movement in movement_sample.itertuples(index=False):
+        exception_type = random.choice(
+            [
+                "MISSING_ASSET",
+                "DAMAGED_ASSET",
+                "ROUTE_EXCEPTION",
+            ]
+        )
+
+        severity = random.choices(
+            [
+                "LOW",
+                "MEDIUM",
+                "HIGH",
+                "CRITICAL",
+            ],
+            weights=[
+                0.20,
+                0.45,
+                0.28,
+                0.07,
+            ],
+            k=1,
+        )[0]
+
+        resolved_flag = random.random() < 0.82
+
+        exception_date = pd.Timestamp(
+            movement.movement_timestamp
+        ).date()
+
+        resolution_date = None
+
+        if resolved_flag:
+            resolution_date = (
+                pd.Timestamp(exception_date)
+                + pd.Timedelta(
+                    days=random.randint(1, 14)
+                )
+            ).date()
+
+        exceptions.append(
+            {
+                "exception_id": f"EXC-{exception_index:08d}",
+                "exception_type": exception_type,
+                "exception_date": exception_date,
+                "severity": severity,
+                "shipment_id": (
+                    movement.related_shipment_id
+                    if pd.notna(
+                        movement.related_shipment_id
+                    )
+                    else None
+                ),
+                "asset_id": movement.asset_id,
+                "customer_id": None,
+                "carrier_id": None,
+                "route_id": None,
+                "location_id": (
+                    movement.destination_location_id
+                    if pd.notna(
+                        movement.destination_location_id
+                    )
+                    else movement.origin_location_id
+                ),
+                "description": (
+                    f"{exception_type.replace('_', ' ').title()} "
+                    "detected during asset movement."
+                ),
+                "resolved_flag": resolved_flag,
+                "resolution_date": resolution_date,
+            }
+        )
+
+        exception_index += 1
+
+    return pd.DataFrame(exceptions)
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -1345,6 +1655,19 @@ def main() -> None:
     write_dataset(
         asset_movements,
         "asset_movements.csv",
+    )
+
+    operational_exceptions = (
+    generate_operational_exceptions(
+        shipments,
+        transportation_costs,
+        asset_movements,
+    )
+    )
+
+    write_dataset(
+        operational_exceptions,
+        "operational_exceptions.csv",
     )
 
 
