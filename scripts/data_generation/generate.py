@@ -8,10 +8,15 @@ from math import asin, cos, radians, sin, sqrt
 from config import (
     ASSET_COUNT,
     CARRIER_COUNT,
+    COST_ANOMALY_RATE,
     CUSTOMER_COUNT,
+    DUPLICATE_SHIPMENT_RATE,
     END_DATE,
     GENERATED_DATA_DIR,
+    INVALID_DATE_RATE,
+    INVALID_QUANTITY_RATE,
     LOCATION_COUNT,
+    MISSING_CARRIER_RATE,
     RANDOM_SEED,
     ROUTE_COUNT,
     SHIPMENT_COUNT,
@@ -1577,6 +1582,392 @@ def generate_operational_exceptions(
     return pd.DataFrame(exceptions)
 
 
+def inject_data_quality_defects(
+    shipments: pd.DataFrame,
+    transportation_costs: pd.DataFrame,
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
+    """
+    Create source-like copies of selected datasets containing
+    controlled and reproducible data-quality defects.
+
+    The clean datasets are preserved.
+
+    Returns:
+        shipments_raw
+        transportation_costs_raw
+        data_quality_issues
+    """
+
+    shipments_raw = shipments.copy()
+    transportation_costs_raw = (
+        transportation_costs.copy()
+    )
+
+    quality_issues = []
+    issue_index = 1
+
+    # ---------------------------------------------------------
+    # Duplicate shipment records
+    # ---------------------------------------------------------
+
+    duplicate_count = max(
+        1,
+        round(
+            len(shipments_raw)
+            * DUPLICATE_SHIPMENT_RATE
+        ),
+    )
+
+    duplicate_rows = shipments_raw.sample(
+        n=duplicate_count,
+        random_state=RANDOM_SEED + 1,
+    ).copy()
+
+    shipments_raw = pd.concat(
+        [
+            shipments_raw,
+            duplicate_rows,
+        ],
+        ignore_index=True,
+    )
+
+    for shipment_id in duplicate_rows[
+        "shipment_id"
+    ]:
+        quality_issues.append(
+            {
+                "issue_id": (
+                    f"DQ-{issue_index:07d}"
+                ),
+                "dataset_name": "shipments",
+                "record_key": shipment_id,
+                "issue_type": (
+                    "DUPLICATE_SHIPMENT"
+                ),
+                "field_name": (
+                    "shipment_id"
+                ),
+                "expected_condition": (
+                    "Shipment ID must be unique."
+                ),
+            }
+        )
+
+        issue_index += 1
+
+    # ---------------------------------------------------------
+    # Missing carrier references
+    # ---------------------------------------------------------
+
+    missing_carrier_count = max(
+        1,
+        round(
+            len(shipments)
+            * MISSING_CARRIER_RATE
+        ),
+    )
+
+    missing_carrier_indices = (
+        shipments_raw[
+            shipments_raw[
+                "carrier_id"
+            ].notna()
+        ]
+        .sample(
+            n=missing_carrier_count,
+            random_state=RANDOM_SEED + 2,
+        )
+        .index
+    )
+
+    for row_index in missing_carrier_indices:
+        shipment_id = shipments_raw.at[
+            row_index,
+            "shipment_id",
+        ]
+
+        shipments_raw.at[
+            row_index,
+            "carrier_id",
+        ] = None
+
+        quality_issues.append(
+            {
+                "issue_id": (
+                    f"DQ-{issue_index:07d}"
+                ),
+                "dataset_name": "shipments",
+                "record_key": shipment_id,
+                "issue_type": (
+                    "MISSING_CARRIER"
+                ),
+                "field_name": "carrier_id",
+                "expected_condition": (
+                    "Transportation shipments "
+                    "should reference a valid carrier."
+                ),
+            }
+        )
+
+        issue_index += 1
+
+    # ---------------------------------------------------------
+    # Invalid delivery dates
+    # ---------------------------------------------------------
+
+    delivered_candidates = shipments_raw[
+        (
+            shipments_raw[
+                "shipment_status"
+            ]
+            == "DELIVERED"
+        )
+        & shipments_raw[
+            "shipment_date"
+        ].notna()
+        & shipments_raw[
+            "actual_delivery_date"
+        ].notna()
+    ]
+
+    invalid_date_count = max(
+        1,
+        round(
+            len(shipments)
+            * INVALID_DATE_RATE
+        ),
+    )
+
+    invalid_date_indices = (
+        delivered_candidates.sample(
+            n=min(
+                invalid_date_count,
+                len(
+                    delivered_candidates
+                ),
+            ),
+            random_state=RANDOM_SEED + 3,
+        )
+        .index
+    )
+
+    for row_index in invalid_date_indices:
+        shipment_id = shipments_raw.at[
+            row_index,
+            "shipment_id",
+        ]
+
+        shipment_date = pd.Timestamp(
+            shipments_raw.at[
+                row_index,
+                "shipment_date",
+            ]
+        )
+
+        shipments_raw.at[
+            row_index,
+            "actual_delivery_date",
+        ] = (
+            shipment_date
+            - pd.Timedelta(
+                days=random.randint(1, 5)
+            )
+        ).date()
+
+        quality_issues.append(
+            {
+                "issue_id": (
+                    f"DQ-{issue_index:07d}"
+                ),
+                "dataset_name": "shipments",
+                "record_key": shipment_id,
+                "issue_type": (
+                    "INVALID_DELIVERY_DATE"
+                ),
+                "field_name": (
+                    "actual_delivery_date"
+                ),
+                "expected_condition": (
+                    "Actual delivery date "
+                    "must not precede shipment date."
+                ),
+            }
+        )
+
+        issue_index += 1
+
+    # ---------------------------------------------------------
+    # Invalid shipment quantities
+    # ---------------------------------------------------------
+
+    valid_quantity_candidates = (
+        shipments_raw[
+            shipments_raw[
+                "shipment_quantity"
+            ] > 0
+        ]
+    )
+
+    invalid_quantity_count = max(
+        1,
+        round(
+            len(shipments)
+            * INVALID_QUANTITY_RATE
+        ),
+    )
+
+    invalid_quantity_indices = (
+        valid_quantity_candidates.sample(
+            n=min(
+                invalid_quantity_count,
+                len(
+                    valid_quantity_candidates
+                ),
+            ),
+            random_state=RANDOM_SEED + 4,
+        )
+        .index
+    )
+
+    for counter, row_index in enumerate(
+        invalid_quantity_indices
+    ):
+        shipment_id = shipments_raw.at[
+            row_index,
+            "shipment_id",
+        ]
+
+        invalid_value = (
+            0
+            if counter % 2 == 0
+            else -random.randint(1, 25)
+        )
+
+        shipments_raw.at[
+            row_index,
+            "shipment_quantity",
+        ] = invalid_value
+
+        quality_issues.append(
+            {
+                "issue_id": (
+                    f"DQ-{issue_index:07d}"
+                ),
+                "dataset_name": "shipments",
+                "record_key": shipment_id,
+                "issue_type": (
+                    "INVALID_SHIPMENT_QUANTITY"
+                ),
+                "field_name": (
+                    "shipment_quantity"
+                ),
+                "expected_condition": (
+                    "Shipment quantity must "
+                    "be greater than zero."
+                ),
+            }
+        )
+
+        issue_index += 1
+
+    # ---------------------------------------------------------
+    # Extreme transportation cost anomalies
+    # ---------------------------------------------------------
+
+    positive_cost_candidates = (
+        transportation_costs_raw[
+            transportation_costs_raw[
+                "cost_amount"
+            ] > 0
+        ]
+    )
+
+    cost_anomaly_count = max(
+        1,
+        round(
+            len(
+                transportation_costs_raw
+            )
+            * COST_ANOMALY_RATE
+        ),
+    )
+
+    anomaly_indices = (
+        positive_cost_candidates.sample(
+            n=min(
+                cost_anomaly_count,
+                len(
+                    positive_cost_candidates
+                ),
+            ),
+            random_state=RANDOM_SEED + 5,
+        )
+        .index
+    )
+
+    for row_index in anomaly_indices:
+        cost_id = (
+            transportation_costs_raw.at[
+                row_index,
+                "transportation_cost_id",
+            ]
+        )
+
+        original_amount = float(
+            transportation_costs_raw.at[
+                row_index,
+                "cost_amount",
+            ]
+        )
+
+        transportation_costs_raw.at[
+            row_index,
+            "cost_amount",
+        ] = round(
+            original_amount
+            * random.uniform(
+                8.0,
+                20.0,
+            ),
+            2,
+        )
+
+        quality_issues.append(
+            {
+                "issue_id": (
+                    f"DQ-{issue_index:07d}"
+                ),
+                "dataset_name": (
+                    "transportation_costs"
+                ),
+                "record_key": cost_id,
+                "issue_type": (
+                    "EXTREME_COST_ANOMALY"
+                ),
+                "field_name": "cost_amount",
+                "expected_condition": (
+                    "Transportation cost "
+                    "should fall within "
+                    "reasonable business ranges."
+                ),
+            }
+        )
+
+        issue_index += 1
+
+    return (
+        shipments_raw,
+        transportation_costs_raw,
+        pd.DataFrame(
+            quality_issues
+        ),
+    )
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -1664,10 +2055,33 @@ def main() -> None:
         asset_movements,
     )
     )
-
     write_dataset(
         operational_exceptions,
         "operational_exceptions.csv",
+    )
+
+    (
+    shipments_raw,
+    transportation_costs_raw,
+    data_quality_issues,
+    ) = inject_data_quality_defects(
+        shipments,
+        transportation_costs,
+    )
+
+    write_dataset(
+        shipments_raw,
+        "shipments_raw.csv",
+    )
+
+    write_dataset(
+        transportation_costs_raw,
+        "transportation_costs_raw.csv",
+    )
+
+    write_dataset(
+        data_quality_issues,
+        "data_quality_issues.csv",
     )
 
 
