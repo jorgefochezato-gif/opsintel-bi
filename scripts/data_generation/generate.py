@@ -1000,6 +1000,273 @@ def generate_transportation_budgets(
     return pd.DataFrame(budgets)
 
 
+def generate_asset_movements(
+    assets: pd.DataFrame,
+    shipments: pd.DataFrame,
+    locations: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Generate historical asset movement events.
+
+    Grain:
+    one row per asset movement or asset status event.
+
+    The generator creates a realistic event history using:
+    - asset lifecycle
+    - shipment-related movements
+    - repositioning
+    - returns
+    - maintenance transfers
+    - status changes
+    """
+
+    active_locations = locations[
+        locations["active_flag"]
+    ].copy()
+
+    location_ids = active_locations[
+        "location_id"
+    ].tolist()
+
+    delivered_shipments = shipments[
+        shipments["shipment_status"] == "DELIVERED"
+    ].copy()
+
+    delivered_shipments = delivered_shipments[
+        delivered_shipments["actual_delivery_date"].notna()
+    ]
+
+    shipment_records = list(
+        delivered_shipments.itertuples(index=False)
+    )
+
+    movement_records = []
+    movement_index = 1
+
+    start_date = pd.Timestamp(START_DATE)
+    end_date = pd.Timestamp(END_DATE)
+
+    movement_types = [
+        "SHIPMENT",
+        "RETURN",
+        "REPOSITION",
+        "MAINTENANCE_TRANSFER",
+        "STATUS_CHANGE",
+    ]
+
+    for asset in assets.itertuples(index=False):
+        asset_created_date = pd.Timestamp(
+            asset.created_date
+        )
+
+        effective_start_date = max(
+            start_date,
+            asset_created_date,
+        )
+
+        if pd.notna(asset.retirement_date):
+            effective_end_date = min(
+                end_date,
+                pd.Timestamp(
+                    asset.retirement_date
+                ),
+            )
+        else:
+            effective_end_date = end_date
+
+        if effective_start_date > effective_end_date:
+            continue
+
+        current_location_id = asset.home_location_id
+        current_status = "AVAILABLE"
+
+        movement_count = random.randint(
+            25,
+            80,
+        )
+
+        event_dates = sorted(
+            effective_start_date
+            + pd.to_timedelta(
+                np.random.randint(
+                    0,
+                    max(
+                        1,
+                        (
+                            effective_end_date
+                            - effective_start_date
+                        ).days
+                        + 1,
+                    ),
+                    size=movement_count,
+                ),
+                unit="D",
+            )
+        )
+
+        for movement_date in event_dates:
+            movement_type = random.choices(
+                movement_types,
+                weights=[
+                    0.48,  # SHIPMENT
+                    0.16,  # RETURN
+                    0.20,  # REPOSITION
+                    0.08,  # MAINTENANCE_TRANSFER
+                    0.08,  # STATUS_CHANGE
+                ],
+                k=1,
+            )[0]
+
+            previous_status = current_status
+            origin_location_id = current_location_id
+            destination_location_id = None
+            related_shipment_id = None
+
+            if (
+                movement_type == "SHIPMENT"
+                and shipment_records
+            ):
+                shipment = random.choice(
+                    shipment_records
+                )
+
+                origin_location_id = (
+                    shipment.origin_location_id
+                )
+
+                destination_location_id = (
+                    shipment.destination_location_id
+                )
+
+                related_shipment_id = (
+                    shipment.shipment_id
+                )
+
+                current_location_id = (
+                    destination_location_id
+                )
+
+                current_status = "IN_TRANSIT"
+
+                # Completed shipment event leaves
+                # the asset available at destination.
+                new_status = "AVAILABLE"
+
+            elif movement_type == "RETURN":
+                destination_location_id = (
+                    asset.home_location_id
+                )
+
+                current_location_id = (
+                    destination_location_id
+                )
+
+                new_status = "AVAILABLE"
+
+            elif movement_type == "REPOSITION":
+                candidate_locations = [
+                    location_id
+                    for location_id in location_ids
+                    if location_id
+                    != current_location_id
+                ]
+
+                destination_location_id = (
+                    random.choice(
+                        candidate_locations
+                    )
+                )
+
+                current_location_id = (
+                    destination_location_id
+                )
+
+                new_status = "AVAILABLE"
+
+            elif (
+                movement_type
+                == "MAINTENANCE_TRANSFER"
+            ):
+                candidate_locations = [
+                    location_id
+                    for location_id in location_ids
+                    if location_id
+                    != current_location_id
+                ]
+
+                destination_location_id = (
+                    random.choice(
+                        candidate_locations
+                    )
+                )
+
+                current_location_id = (
+                    destination_location_id
+                )
+
+                new_status = "MAINTENANCE"
+
+            else:
+                possible_statuses = [
+                    "AVAILABLE",
+                    "IN_USE",
+                    "IN_TRANSIT",
+                    "MAINTENANCE",
+                ]
+
+                new_status = random.choice(
+                    possible_statuses
+                )
+
+                destination_location_id = (
+                    current_location_id
+                )
+
+            movement_timestamp = (
+                pd.Timestamp(movement_date)
+                + pd.Timedelta(
+                    hours=random.randint(0, 23),
+                    minutes=random.randint(0, 59),
+                    seconds=random.randint(0, 59),
+                )
+            )
+
+            movement_records.append(
+                {
+                    "asset_movement_id": (
+                        f"MOV-{movement_index:09d}"
+                    ),
+                    "asset_id": asset.asset_id,
+                    "movement_timestamp": (
+                        movement_timestamp
+                    ),
+                    "origin_location_id": (
+                        origin_location_id
+                    ),
+                    "destination_location_id": (
+                        destination_location_id
+                    ),
+                    "movement_type": (
+                        movement_type
+                    ),
+                    "previous_status": (
+                        previous_status
+                    ),
+                    "new_status": new_status,
+                    "related_shipment_id": (
+                        related_shipment_id
+                    ),
+                }
+            )
+
+            current_status = new_status
+            movement_index += 1
+
+    return pd.DataFrame(
+        movement_records
+    )
+
+
 def main() -> None:
     faker = initialize_random_state()
     ensure_output_directory()
@@ -1016,22 +1283,22 @@ def main() -> None:
     write_dataset(locations, "locations.csv")
 
     customers = generate_customers(
-    faker,
-    regions,
-    CUSTOMER_COUNT,
+        faker,
+        regions,
+        CUSTOMER_COUNT,
     )
     write_dataset(customers, "customers.csv")
 
     carriers = generate_carriers(
-    faker,
-    regions,
-    CARRIER_COUNT,
+        faker,
+        regions,
+        CARRIER_COUNT,
     )
     write_dataset(carriers, "carriers.csv")
 
     routes = generate_routes(
-    locations,
-    ROUTE_COUNT,
+        locations,
+        ROUTE_COUNT,
     )
     write_dataset(routes, "routes.csv")
 
@@ -1043,19 +1310,19 @@ def main() -> None:
     write_dataset(assets, "assets.csv")
     
     shipments = generate_shipments(
-      faker,
-      customers,
-      carriers,
-      routes,
-      locations,
-      SHIPMENT_COUNT,
+        faker,
+        customers,
+        carriers,
+        routes,
+        locations,
+        SHIPMENT_COUNT,
     )
     write_dataset(shipments, "shipments.csv")
 
     transportation_costs = generate_transportation_costs(
-      shipments,
-      carriers,
-      routes,
+        shipments,
+        carriers,
+        routes,
     )
     write_dataset(
         transportation_costs,
@@ -1063,11 +1330,21 @@ def main() -> None:
     )
 
     transportation_budgets = generate_transportation_budgets(
-    regions,
+        regions,
     )
     write_dataset(
         transportation_budgets,
         "transportation_budgets.csv",
+    )
+
+    asset_movements = generate_asset_movements(
+        assets,
+        shipments,
+        locations,
+    )
+    write_dataset(
+        asset_movements,
+        "asset_movements.csv",
     )
 
 
