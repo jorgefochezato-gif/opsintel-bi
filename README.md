@@ -102,28 +102,33 @@ The project follows a **Build → Learn → Prove** approach so that each implem
 
 ## Current Status
 
-Last checked: **2026-10-05**.
+Last checked: **2026-10-13**.
 
 | Phase | Status | Evidence |
 | --- | --- | --- |
-| 1 — Project Foundation | Completed and merged | [PR #1](https://github.com/jorgefochezato-gif/opsintel-bi/pull/1), [issue #3](https://github.com/jorgefochezato-gif/opsintel-bi/issues/3) |
-| 2 — Business Requirements | Completed and merged | [PR #2](https://github.com/jorgefochezato-gif/opsintel-bi/pull/2), [issue #4](https://github.com/jorgefochezato-gif/opsintel-bi/issues/4) |
-| 3 — Synthetic Operational Dataset | In progress; local progress reported by the owner | [Issue #5](https://github.com/jorgefochezato-gif/opsintel-bi/issues/5) |
-| 4–15 — Database through portfolio release | Planned / Todo | [15-phase project roadmap](https://github.com/users/jorgefochezato-gif/projects/2) |
+| 1 — Project Foundation | Done / completed and merged | [PR #1](https://github.com/jorgefochezato-gif/opsintel-bi/pull/1), [issue #3](https://github.com/jorgefochezato-gif/opsintel-bi/issues/3) |
+| 2 — Business Requirements | Done / completed and merged | [PR #2](https://github.com/jorgefochezato-gif/opsintel-bi/pull/2), [issue #4](https://github.com/jorgefochezato-gif/opsintel-bi/issues/4) |
+| 3 — Synthetic Operational Dataset | Done / completed and merged | [PR #19](https://github.com/jorgefochezato-gif/opsintel-bi/pull/19), [issue #5](https://github.com/jorgefochezato-gif/opsintel-bi/issues/5) |
+| 4 — PostgreSQL Foundation | Todo / not started; next phase | [Issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6) |
+| 5–15 — Dimensional modeling through portfolio release | Planned / Todo | [15-phase project roadmap](https://github.com/users/jorgefochezato-gif/projects/2) |
 
 ### Published and completed
 
-The main branch contains the repository structure, business scenario, 16-entry KPI catalog, solution architecture, business-process matrix, stakeholder use cases, report requirements, business rules and edge cases, data requirements, acceptance criteria, and Phase 1–2 checklists.
+The main branch contains the repository foundation, business scenario, KPI catalog, solution architecture, business-process matrix, stakeholder use cases, report requirements, business rules, data requirements, acceptance criteria, and Phase 1–3 documentation.
 
-### Dataset development in progress
+Phase 3 was merged through [PR #19](https://github.com/jorgefochezato-gif/opsintel-bi/pull/19). Its deterministic Python generator includes locked dependencies, regions, geographically coherent locations, customers, carriers with service profiles, routes, reusable assets, 100,000 shipments, transportation cost transactions, monthly regional budgets, asset movement history, and operational exceptions.
 
-Issue #5 records owner-reported local progress on the Python environment, deterministic generator foundation, regions, locations, customers, carrier service profiles, routes, assets, shipments, and transportation costs.
+Clean reference datasets are generated under `data/generated/`. Source-like shipments and transportation costs with controlled defects are written to `data/raw/`. Defects include duplicates, missing carrier references, invalid delivery dates, invalid quantities, and extreme transportation costs; a data-quality issue manifest records the injected defects.
 
-The reported branch, `feat/phase-3-synthetic-dataset`, has not yet been pushed and has no published PR as of the date above. These items are not independently validated from public code and do not represent completion of Phase 3.
+Published [dataset validation tests](tests/test_generated_data.py) cover counts, uniqueness, referential integrity, geographic consistency, business rules, and controlled defects. The [reproducibility test](tests/test_reproducibility.py) compares SHA-256 hashes across repeated generator runs. PR #19 records successful generator execution and passing validation; the status synchronization did not rerun those tests.
 
-Remaining work includes transportation budgets, asset movements, operational exceptions, controlled data-quality defects, automated validation, a reproducibility test, documentation, and PR review/merge.
+See the [Phase 3 summary](docs/phase-3-summary.md) and [Phase 3 checklist](docs/phase-3-checklist.md) for dataset scale, reporting dates, and implementation details.
 
-The public data, database, SQL, Power BI, scripts, and tests directories currently contain placeholders. No working dashboard, SQL-to-DAX reconciliation, implemented security roles, or released end-to-end solution is published yet.
+### Next: PostgreSQL Foundation
+
+[Phase 4](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6) remains Todo. Planned work includes Docker PostgreSQL, database initialization, `raw`/`staging`/`analytics` schemas, raw table definitions, repeatable CSV ingestion, constraints and indexes, data-quality validation queries, staging cleanup, and backup/restore verification.
+
+Database implementation, dimensional modeling, downstream SQL transformations, Power BI reports, SQL-to-DAX reconciliation, and Row-Level Security remain planned.
 
 ## Trust, Traceability, and Design Commitments
 
@@ -132,7 +137,7 @@ These commitments guide implementation; the requirements are published, while th
 - **SQL-to-dashboard traceability:** [KPI definitions](docs/requirements/kpi-catalog.md) and [business rules](docs/requirements/business-rules.md) establish calculation meaning, exclusions, date context, and edge cases. Equivalent SQL and Power BI results must reconcile under the same filters, including independent numerator and denominator checks.
 - **Stakeholder-specific reporting:** [Stakeholder use cases](docs/requirements/stakeholder-use-cases.md) and [report requirements](docs/requirements/report-requirements.md) define the questions each audience needs to answer. Each visual should support a documented decision.
 - **Security from the design stage:** Regional access restrictions are documented. Row-Level Security implementation and authorized/unauthorized access tests are planned in [Phase 13](https://github.com/jorgefochezato-gif/opsintel-bi/issues/15).
-- **Synthetic data and visible quality issues:** The dataset is intended to be fully fabricated, with no real customer or employer records. Controlled defects will be introduced deliberately to exercise detection, flagging, handling, and validation. Defect injection and its validation are still pending in Phase 3.
+- **Synthetic data and visible quality issues:** Phase 3 provides synthetic operational data with controlled defects, a defect manifest, and automated validation. Clean reference data and source-like raw data are kept separate. SQL detection and staging treatment are planned in Phase 4.
 - **Consistent business meaning:** Reusable definitions and independently reproducible calculations are intended to support a shared source of truth across teams. This is a design objective, not a demonstrated production outcome.
 
 ## Documentation and AI-Assisted Workflow
@@ -147,7 +152,8 @@ For each phase:
 2. Update requirements and affected documentation alongside implementation.
 3. Record decisions, unresolved assumptions, and validation evidence at each checkpoint.
 4. Keep work In Progress until validation and review are complete and the final PR is merged.
-5. Update the README status, issue checklist, and project-board status together when progress changes.
+5. Use `feat/phase-N-description`, reference the phase issue with `Refs #issue` for partial PRs, and use `Closes #issue` only in the final phase PR.
+6. After the final PR is validated and merged into `main`, verify the merge, close the issue as completed, set the project item to Done, and update the README status and issue checklist together. Recheck the final project status after linking PRs, because project workflows may change it.
 
 AI-assisted output must be reviewed and validated. Completed implementation claims should link to published artifacts and evidence; local reports and planned capabilities should remain explicitly labeled.
 
@@ -176,3 +182,4 @@ The planned development includes:
 13. Row-Level Security
 14. Performance and Enterprise Tooling
 15. QA, Documentation, and Portfolio Release
+
