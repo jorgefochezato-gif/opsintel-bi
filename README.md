@@ -109,7 +109,7 @@ Last checked: **2026-10-13**.
 | 1 — Project Foundation | Done / completed and merged | [PR #1](https://github.com/jorgefochezato-gif/opsintel-bi/pull/1), [issue #3](https://github.com/jorgefochezato-gif/opsintel-bi/issues/3) |
 | 2 — Business Requirements | Done / completed and merged | [PR #2](https://github.com/jorgefochezato-gif/opsintel-bi/pull/2), [issue #4](https://github.com/jorgefochezato-gif/opsintel-bi/issues/4) |
 | 3 — Synthetic Operational Dataset | Done / completed and merged | [PR #19](https://github.com/jorgefochezato-gif/opsintel-bi/pull/19), [issue #5](https://github.com/jorgefochezato-gif/opsintel-bi/issues/5) |
-| 4 — PostgreSQL Foundation | Todo / not started; next phase | [Issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6) |
+| 4 — PostgreSQL Foundation | In progress locally; implementation not yet published/merged | [Issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6) |
 | 5–15 — Dimensional modeling through portfolio release | Planned / Todo | [15-phase project roadmap](https://github.com/users/jorgefochezato-gif/projects/2) |
 
 ### Published and completed
@@ -124,11 +124,13 @@ Published [dataset validation tests](tests/test_generated_data.py) cover counts,
 
 See the [Phase 3 summary](docs/phase-3-summary.md) and [Phase 3 checklist](docs/phase-3-checklist.md) for dataset scale, reporting dates, and implementation details.
 
-### Next: PostgreSQL Foundation
+### PostgreSQL Foundation in progress
 
-[Phase 4](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6) remains Todo. Planned work includes Docker PostgreSQL, database initialization, `raw`/`staging`/`analytics` schemas, raw table definitions, repeatable CSV ingestion, constraints and indexes, data-quality validation queries, staging cleanup, and backup/restore verification.
+The [development conversation](https://chatgpt.com/share/6ace94d4-5aa4-83e9-941e-0a01126b84a9) has progressed into Docker PostgreSQL setup, raw ingestion, staging cleanup, and proposed SQL/Python validation. Phase 4 is **In Progress**, based on this local development context. No Phase 4 implementation branch, PR, or execution results were available on GitHub when checked on 2026-10-13; these are not claims of published or validated database implementation.
 
-Database implementation, dimensional modeling, downstream SQL transformations, Power BI reports, SQL-to-DAX reconciliation, and Row-Level Security remain planned.
+See the [Phase 4 progress summary](docs/phase-4-summary.md), [checklist](docs/phase-4-checklist.md), [local database setup guide](docs/database-setup.md), and [raw/staging decisions and validation limits](docs/decisions/raw-staging-data-quality.md).
+
+Indexes and appropriate constraints, performance checks, backup/restore verification, captured validation results, and final review/merge remain pending. Dimensional modeling, downstream SQL transformations, Power BI reports, SQL-to-DAX reconciliation, and Row-Level Security remain planned.
 
 ## Trust, Traceability, and Design Commitments
 
@@ -137,7 +139,7 @@ These commitments guide implementation; the requirements are published, while th
 - **SQL-to-dashboard traceability:** [KPI definitions](docs/requirements/kpi-catalog.md) and [business rules](docs/requirements/business-rules.md) establish calculation meaning, exclusions, date context, and edge cases. Equivalent SQL and Power BI results must reconcile under the same filters, including independent numerator and denominator checks.
 - **Stakeholder-specific reporting:** [Stakeholder use cases](docs/requirements/stakeholder-use-cases.md) and [report requirements](docs/requirements/report-requirements.md) define the questions each audience needs to answer. Each visual should support a documented decision.
 - **Security from the design stage:** Regional access restrictions are documented. Row-Level Security implementation and authorized/unauthorized access tests are planned in [Phase 13](https://github.com/jorgefochezato-gif/opsintel-bi/issues/15).
-- **Synthetic data and visible quality issues:** Phase 3 provides synthetic operational data with controlled defects, a defect manifest, and automated validation. Clean reference data and source-like raw data are kept separate. SQL detection and staging treatment are planned in Phase 4.
+- **Synthetic data and visible quality issues:** Phase 3 provides synthetic operational data with controlled defects, a defect manifest, and automated validation. Clean reference data and source-like raw data are kept separate. SQL detection and staging treatment are now being developed locally in Phase 4; execution results and implementation publication remain to be verified.
 - **Consistent business meaning:** Reusable definitions and independently reproducible calculations are intended to support a shared source of truth across teams. This is a design objective, not a demonstrated production outcome.
 
 ## Documentation and AI-Assisted Workflow
@@ -182,4 +184,5 @@ The planned development includes:
 13. Row-Level Security
 14. Performance and Enterprise Tooling
 15. QA, Documentation, and Portfolio Release
+
 
