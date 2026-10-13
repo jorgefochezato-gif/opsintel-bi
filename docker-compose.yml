@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: opsintel-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: opsintel
+      POSTGRES_PASSWORD: opsintel
+      POSTGRES_DB: opsintel
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - opsintel_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U opsintel -d opsintel",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  opsintel_postgres_data:
