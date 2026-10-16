@@ -99,7 +99,7 @@ Updated 2026-10-13: [PR #19](https://github.com/jorgefochezato-gif/opsintel-bi/p
 
 **Phase 4 — PostgreSQL Foundation**
 
-Phase 4 is now In Progress locally. See [Phase 4 summary](phase-4-summary.md) and [checklist](phase-4-checklist.md). Scope includes:
+Phase 4 is completed and merged in [PR #22](https://github.com/jorgefochezato-gif/opsintel-bi/pull/22) as of 2026-10-16; issue #6 is closed and project Done. Phase 5 (#9) is Todo / next. See [Phase 4 summary](phase-4-summary.md) and [checklist](phase-4-checklist.md). Delivered Phase 4 scope includes:
 
 - Docker PostgreSQL service
 - database initialization
@@ -110,3 +110,7 @@ Phase 4 is now In Progress locally. See [Phase 4 summary](phase-4-summary.md) an
 - data-quality validation queries
 - staging cleanup logic
 - backup and restore verification
+
+## Current synchronization note (2026-10-16)
+
+The published generator was rerun with Python 3.12 and pinned dependencies, and the dataset validation module passed: 12 passed in 6.81s. The reproducibility test was not rerun, so historical full-suite/reproducibility tasks above retain their original evidence limits. A fresh checkout of remote main was synchronized; the original WSL checkout was inaccessible.

@@ -1,5 +1,7 @@
 # Phase 4 — PostgreSQL Foundation
 
+Status: **Done**. Merged 2026-10-16 in [PR #22](https://github.com/jorgefochezato-gif/opsintel-bi/pull/22), merge `b30e726`, implementation head `fec7936f9f5c97d0ab285392398058d87fcf32af`. Tracking: [issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6). The remote feature branch is deleted. Phase 5 (#9) is Todo / next; implementation has not started.
+
 ## Objective
 
 Establish a reproducible PostgreSQL environment for OpsIntel BI and implement the first database ingestion, validation, staging, performance, and recovery workflows.
@@ -77,7 +79,7 @@ The raw layer preserves controlled defects generated during Phase 3.
 
 Shipment staging logic currently:
 
-- removes duplicate Shipment IDs deterministically
+- keeps one row per Shipment ID ordered by created timestamp; equal-timestamp ties have no additional tie-breaker
 - converts invalid shipment quantities to NULL
 - converts impossible delivery dates to NULL
 - preserves missing carrier references
@@ -168,7 +170,7 @@ Representative analytical SQL has been created for:
 
 ## Database Initialization
 
-The database can now be rebuilt using:
+The published initialization procedure is:
 
 ```bash
 ./scripts/init_database.sh
@@ -202,13 +204,13 @@ database/backups/
 
 Backup dump files are excluded from Git.
 
-Restore behavior is verified using:
+The published restore procedure is:
 
 ```bash
 ./scripts/verify_restore.sh
 ```
 
-The restore script creates a separate test database and validates restored row counts without modifying the working database.
+The restore script creates a separate test database and prints restored counts without modifying the working database. It does not assert equality with source counts or verify full restored integrity.
 
 ## Phase 4 Architecture
 
@@ -245,3 +247,10 @@ OpsIntel BI now has a reproducible PostgreSQL foundation with:
 - backup and restore verification
 
 The project is ready to proceed to the next modeling phase.
+## Evidence and validation limits (2026-10-16)
+
+PR #22 reports preserved raw defects, passing reconciliation tests, and successful initialization, backup, and restore. These are PR-reported results. No captured database logs or GitHub Actions workflow are committed; Docker/WSL is unavailable in the synchronization session, so database execution was not independently rerun.
+
+The seven integration tests cover counts, shipment ID sets, uniqueness, selected invalid values, and some missing-carrier warnings. They do not establish full field recovery, complete warning coverage, cost identity/value equality, or all reference relationships. See [quality decisions](decisions/raw-staging-data-quality.md) for timestamp ties, non-NULL orphan references, and compound-warning limitations. Initialization uses psql without ON_ERROR_STOP, so its final success message alone is insufficient evidence that every SQL statement succeeded. Backup/restore currently needs manual count comparison.
+
+See the [closure checklist](phase-4-checklist.md) and [setup guide](database-setup.md). Phase 4 delivery is merged; the limitations above remain explicit and are not claimed as completed validation.
