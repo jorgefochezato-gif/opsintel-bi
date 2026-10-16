@@ -1,5 +1,7 @@
 # Phase 4 — PostgreSQL Foundation Checklist
 
+Status: **Done**, merged 2026-10-16 in [PR #22](https://github.com/jorgefochezato-gif/opsintel-bi/pull/22), merge `b30e726`; [issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6). Implementation checkmarks below reflect published scope and PR-reported validation. They do not claim an independent database rerun during status synchronization.
+
 ## Infrastructure
 
 - [x] Add Docker Compose PostgreSQL service.
@@ -88,19 +90,23 @@
 
 ## Phase Closure
 
+The fresh synchronization checkout is based on remote main; the original WSL checkout is inaccessible and its local branch state is not verified. Remote feature-branch deletion is verified. The four execution tasks below remain unchecked for an independent rerun; PR #22 reports successful reconciliation, initialization, backup, and restore, without captured logs or a full-suite count.
+
 - [ ] Run complete automated test suite.
 - [ ] Run initialization from current repository state.
 - [ ] Run backup.
 - [ ] Run restore verification.
-- [ ] Review Phase 4 Git diff.
-- [ ] Push feature branch.
-- [ ] Open Phase 4 pull request.
-- [ ] Review Phase 4 pull request.
-- [ ] Merge into `main`.
-- [ ] Synchronize local `main`.
-- [ ] Delete completed feature branch.
-- [ ] Sync GitHub Project status.
+- [x] Review Phase 4 Git diff.
+- [x] Push feature branch.
+- [x] Open Phase 4 pull request.
+- [x] Review Phase 4 pull request.
+- [x] Merge into `main`.
+- [x] Synchronize local `main`.
+- [x] Delete completed feature branch.
+- [x] Sync GitHub Project status.
 
 ## Next Phase
 
-The next phase will build the analytical dimensional model on top of the validated staging layer.
+[Phase 5 (#9)](https://github.com/jorgefochezato-gif/opsintel-bi/issues/9) is Todo / next. It will build the dimensional model on the staging layer; implementation has not started.
+
+See [summary evidence and limits](phase-4-summary.md) and [quality decisions](decisions/raw-staging-data-quality.md). Restore prints counts rather than asserting equality; timestamp ties and complete reference integrity remain validation limits.
