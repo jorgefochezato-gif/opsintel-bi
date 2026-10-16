@@ -1,53 +1,106 @@
 # Phase 4 — PostgreSQL Foundation Checklist
 
-Status: **In Progress locally**. Last checked: 2026-10-13.
-Tracking: [issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6).
-Source: [development conversation](https://chatgpt.com/share/6ace94d4-5aa4-83e9-941e-0a01126b84a9).
+## Infrastructure
 
-Implementation instructions exist for the first sections below. Checkboxes remain unchecked until the saved implementation and execution evidence are supplied or verified. This avoids treating proposed commands as successful execution.
+- [x] Add Docker Compose PostgreSQL service.
+- [x] Use PostgreSQL 17.
+- [x] Configure isolated local host port.
+- [x] Add container health check.
+- [x] Verify PostgreSQL connectivity.
 
-## Infrastructure and ingestion
+## Schemas
 
-- [ ] Confirm local feat/phase-4-postgresql-foundation branch and commit.
-- [ ] Configure Docker PostgreSQL service, persistent volume, health check, and port mapping.
-- [ ] Verify startup and database connectivity.
-- [ ] Create raw, staging, and analytics schemas.
-- [ ] Define raw shipments and transportation_costs tables.
-- [ ] Load source-like CSVs repeatably while retaining controlled defects.
-- [ ] Record raw counts and source reconciliation.
-- [ ] Document explicit source mappings for any additional master/reference tables.
+- [x] Create `raw` schema.
+- [x] Create `staging` schema.
+- [x] Create `analytics` schema.
 
-## Cleanup and validation
+## Raw Layer
 
-- [ ] Save and run raw shipment/cost quality queries and summary.
-- [ ] Create staging shipments_clean and transportation_costs_clean tables.
-- [ ] Load staging with documented duplicate selection and warning rules.
-- [ ] Verify warning-compatible handling of invalid dates, quantities, missing references, and extreme costs.
-- [ ] Save and run staging SQL quality queries.
-- [ ] Add psycopg dependency and refresh the dependency lock.
-- [ ] Save and run Python staging reconciliation tests.
-- [ ] Capture full-suite results and required database/data prerequisites.
-- [ ] Record counts, IDs, quality findings, and reconciliation limits.
-- [ ] Compare detected defects with the injected defect manifest using explicitly defined matching rules.
+- [x] Create raw shipment table.
+- [x] Create raw transportation-cost table.
+- [x] Load raw shipment CSV.
+- [x] Load raw transportation-cost CSV.
+- [x] Preserve known source defects.
+- [x] Validate raw row counts.
+- [x] Validate duplicate shipments.
+- [x] Validate missing carriers.
+- [x] Validate invalid quantities.
+- [x] Validate invalid delivery dates.
+- [x] Validate transportation-cost anomalies.
 
-## Remaining engineering work
+## Staging Layer
 
-- [ ] Review duplicate timestamp ties and deterministic selection.
-- [ ] Review primary keys, appropriate constraints, and indexes.
-- [ ] Review reference existence checks and compound quality-note checks.
-- [ ] Capture applicable query plans and performance observations.
-- [ ] Verify backup and restore in a separate test database.
-- [ ] Reconcile post-restore counts and integrity checks.
+- [x] Create staged shipment table.
+- [x] Create staged transportation-cost table.
+- [x] Deduplicate shipments.
+- [x] Normalize invalid quantities.
+- [x] Normalize impossible delivery dates.
+- [x] Preserve missing references.
+- [x] Add quality-status classification.
+- [x] Add quality notes.
+- [x] Validate staging output.
 
-## Documentation and closure
+## Reconciliation
 
-- [x] Document local progress and evidence boundary.
-- [x] Document setup sequence, quality decisions, and validation limits.
-- [ ] Replace expected outcomes with captured execution evidence.
-- [ ] Push implementation branch and link partial PRs with Refs #6.
-- [ ] Review and merge final implementation PR with Closes #6.
-- [ ] Synchronize local main and phase documentation.
-- [ ] Close issue #6 as completed and set project Done only after verified merge.
+- [x] Compare staging shipment count to clean reference.
+- [x] Compare shipment ID coverage to clean reference.
+- [x] Verify duplicate removal.
+- [x] Verify invalid quantity cleanup.
+- [x] Verify invalid delivery-date cleanup.
+- [x] Verify missing carriers remain traceable.
+- [x] Add automated database reconciliation tests.
 
-The documentation tasks describe this documentation update only. Phase 4 implementation remains in progress.
+## Constraints and Indexes
 
+- [x] Add staging primary keys.
+- [x] Add CHECK constraints.
+- [x] Add date indexes.
+- [x] Add carrier indexes.
+- [x] Add customer indexes.
+- [x] Add route indexes.
+- [x] Add status indexes.
+- [x] Add location indexes.
+- [x] Add shipment-to-cost indexes.
+- [x] Add compound indexes for representative query patterns.
+
+## Query Analysis
+
+- [x] Create representative analytical SQL queries.
+- [x] Add `EXPLAIN ANALYZE` examples.
+- [x] Inspect index usage.
+- [x] Review PostgreSQL query planner behavior.
+
+## Automation
+
+- [x] Create repeatable database initialization script.
+- [x] Rebuild raw ingestion automatically.
+- [x] Rebuild staging automatically.
+- [x] Add automated raw validation during initialization.
+
+## Backup and Restore
+
+- [x] Create backup directory.
+- [x] Exclude dump files from Git.
+- [x] Create database backup script.
+- [x] Create restore verification script.
+- [x] Restore into isolated test database.
+- [x] Verify restored row counts.
+
+## Phase Closure
+
+- [ ] Run complete automated test suite.
+- [ ] Run initialization from current repository state.
+- [ ] Run backup.
+- [ ] Run restore verification.
+- [ ] Review Phase 4 Git diff.
+- [ ] Push feature branch.
+- [ ] Open Phase 4 pull request.
+- [ ] Review Phase 4 pull request.
+- [ ] Merge into `main`.
+- [ ] Synchronize local `main`.
+- [ ] Delete completed feature branch.
+- [ ] Sync GitHub Project status.
+
+## Next Phase
+
+The next phase will build the analytical dimensional model on top of the validated staging layer.
