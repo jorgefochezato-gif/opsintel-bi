@@ -35,3 +35,7 @@ Thumbs.db
 # IDE / editor
 .vscode/
 .idea/
+
+# PostgreSQL backups
+database/backups/*
+!database/backups/.gitkeep

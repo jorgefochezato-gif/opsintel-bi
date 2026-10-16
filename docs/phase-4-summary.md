@@ -1,59 +1,247 @@
-# Phase 4 — PostgreSQL Foundation: Progress Summary
+# Phase 4 — PostgreSQL Foundation
 
-Status: **In Progress locally; implementation and execution evidence not yet verified on GitHub**.
-Last checked: 2026-10-13. Tracking: [issue #6](https://github.com/jorgefochezato-gif/opsintel-bi/issues/6).
+## Objective
 
-## Evidence boundary
+Establish a reproducible PostgreSQL environment for OpsIntel BI and implement the first database ingestion, validation, staging, performance, and recovery workflows.
 
-The [development conversation](https://chatgpt.com/share/6ace94d4-5aa4-83e9-941e-0a01126b84a9) records the start of Phase 4 and instructions through raw ingestion, staging cleanup, SQL quality checks, and Python reconciliation tests. Those instructions establish the current work scope; they are not proof that every file was saved, every command completed, or all tests passed.
+## Infrastructure
 
-At this documentation checkpoint, GitHub main contains merged Phase 3 (PR #19) and README synchronization (PR #20). No Phase 4 implementation branch or PR was found. The intended local implementation branch is `feat/phase-4-postgresql-foundation`; its existence and contents must be confirmed locally. A documentation PR does not complete Phase 4.
-
-## Work covered in the local development conversation
-
-- PostgreSQL 17 through Docker Compose, a persistent named volume, and a health check.
-- Host port 5433 mapped to PostgreSQL container port 5432.
-- Database initialization with raw, staging, and analytics schemas.
-- Raw shipments and transportation-cost tables that retain source defects.
-- Repeatable CSV ingestion from data/raw.
-- Raw SQL quality checks and a compact quality summary.
-- Staging shipments_clean and transportation_costs_clean tables.
-- Shipment deduplication and invalid-value normalization with quality warnings.
-- Cost warning classification while retaining extreme values.
-- Proposed staging SQL validation and Python reconciliation using psycopg.
-
-## Data flow and scope
+PostgreSQL runs in Docker using:
 
 ```text
-Python generator
-  -> data/raw/ shipments and transportation costs
-  -> PostgreSQL raw tables
-  -> staging cleanup and quality classification
-  -> staging tables
-
-data/generated/ clean CSVs
-  -> independent reference checks (outside raw ingestion)
+PostgreSQL 17
+Container: opsintel-postgres
+Host port: 5433
+Database: opsintel
+User: opsintel
 ```
 
-The analytics schema is a namespace for later work, not evidence that a dimensional model exists. Other master/reference datasets require explicit source mappings before ingestion. Phase 5 remains responsible for dimensional modeling; Phase 6 for the broader SQL transformation layer.
+The host port uses `5433` to avoid conflicts with other local PostgreSQL projects.
 
-## Verification still required
+## Database Schemas
 
-Record the implementation commit, exact dependency versions, database health, schema/table creation, raw/staging row counts, warning distributions, SQL check outputs, and pytest results before checking delivery tasks off. Expected outcomes must be separate from measured outcomes.
+The database contains three logical schemas:
 
-Shipment reconciliation currently checks row counts and the set of shipment IDs. Cost reconciliation checks row counts against raw costs. Selected quality rules check duplicates, nonpositive quantities, impossible delivery dates, and warnings for missing carriers. These checks do not prove full field-by-field equality or complete referential integrity.
+```text
+raw
+staging
+analytics
+```
 
-See [raw/staging decisions and validation limits](decisions/raw-staging-data-quality.md).
+### raw
 
-## Remaining phase work
+Preserves source-like data as received.
 
-- Verify and publish current local implementation.
-- Review staging indexes and constraints, including warning-compatible constraints.
-- Confirm deterministic duplicate tie handling and warning checks.
-- Capture meaningful query plans/performance evidence where applicable.
-- Verify backup and restore with post-restore counts and integrity checks.
-- Finalize setup instructions and record validation evidence.
-- Review and merge the final Phase 4 implementation PR, then close issue #6 and set Done.
+The raw layer intentionally allows:
 
-See the [Phase 4 checklist](phase-4-checklist.md) and [database setup guide](database-setup.md).
+- duplicate business keys
+- missing references
+- invalid quantities
+- impossible dates
+- extreme values
 
+### staging
+
+Applies deterministic cleanup and classification logic.
+
+Current staging tables:
+
+```text
+staging.shipments_clean
+staging.transportation_costs_clean
+```
+
+### analytics
+
+Reserved for the dimensional analytical model that will be built in a later phase.
+
+## Raw Ingestion
+
+Current raw tables:
+
+```text
+raw.shipments
+raw.transportation_costs
+```
+
+Input files:
+
+```text
+data/raw/shipments.csv
+data/raw/transportation_costs.csv
+```
+
+The raw layer preserves controlled defects generated during Phase 3.
+
+## Staging Cleanup
+
+Shipment staging logic currently:
+
+- removes duplicate Shipment IDs deterministically
+- converts invalid shipment quantities to NULL
+- converts impossible delivery dates to NULL
+- preserves missing carrier references
+- flags problematic records with `quality_status`
+- records reasons in `quality_notes`
+
+Transportation-cost staging logic currently:
+
+- preserves valid charge, credit, and reversal transactions
+- flags missing shipment references
+- flags invalid credit/reversal sign behavior
+- preserves extreme values for later analysis rather than deleting them
+
+## Data Quality Validation
+
+Version-controlled SQL validation now exists for:
+
+```text
+raw shipment quality
+raw transportation-cost quality
+raw quality summary
+staging shipment quality
+staging transportation-cost quality
+```
+
+These checks validate conditions such as:
+
+- duplicate shipments
+- missing carriers
+- invalid quantities
+- impossible dates
+- duplicate transportation cost IDs
+- credit/reversal sign behavior
+- quality warning distributions
+
+## Reconciliation Testing
+
+Python integration tests compare PostgreSQL staging output with the clean synthetic reference datasets.
+
+Current reconciliation validates:
+
+- staged shipment row count
+- shipment ID coverage
+- staged transportation-cost row count
+- removal of duplicate shipments
+- normalization of invalid quantities
+- normalization of impossible delivery dates
+- preservation and classification of missing carrier references
+
+## Constraints and Indexes
+
+The staging layer now includes:
+
+- primary keys
+- status CHECK constraints
+- quality-status CHECK constraints
+- transaction-type CHECK constraints
+- date indexes
+- customer indexes
+- carrier indexes
+- route indexes
+- status indexes
+- location indexes
+- shipment-to-cost indexes
+- compound date/status and shipment/date indexes
+
+Indexes were selected based on expected BI query patterns rather than indexing every column.
+
+## Query Analysis
+
+Representative analytical SQL has been created for:
+
+- shipment volume by month
+- carrier delivery performance
+- transportation cost by month
+- shipment-level transportation cost
+
+`EXPLAIN ANALYZE` examples are included to study:
+
+- sequential scans
+- index scans
+- bitmap scans
+- joins
+- aggregates
+- planning time
+- execution time
+- buffer usage
+
+## Database Initialization
+
+The database can now be rebuilt using:
+
+```bash
+./scripts/init_database.sh
+```
+
+The script:
+
+1. starts PostgreSQL
+2. waits for database health
+3. creates schemas
+4. creates raw tables
+5. creates staging tables
+6. applies constraints and indexes
+7. reloads raw CSV files
+8. rebuilds staging tables
+9. runs raw data-quality validation
+
+## Backup and Restore
+
+The database can be backed up using:
+
+```bash
+./scripts/backup_database.sh
+```
+
+Backups are written under:
+
+```text
+database/backups/
+```
+
+Backup dump files are excluded from Git.
+
+Restore behavior is verified using:
+
+```bash
+./scripts/verify_restore.sh
+```
+
+The restore script creates a separate test database and validates restored row counts without modifying the working database.
+
+## Phase 4 Architecture
+
+```text
+data/raw/
+     ↓
+PostgreSQL raw schema
+     ↓
+SQL validation
+     ↓
+staging cleanup
+     ↓
+staging schema
+     ↓
+constraints + indexes
+     ↓
+query analysis
+     ↓
+future analytics model
+```
+
+## Phase 4 Outcome
+
+OpsIntel BI now has a reproducible PostgreSQL foundation with:
+
+- raw ingestion
+- controlled defect preservation
+- deterministic staging cleanup
+- SQL validation
+- integration testing
+- indexing
+- query-plan analysis
+- automated initialization
+- backup and restore verification
+
+The project is ready to proceed to the next modeling phase.
